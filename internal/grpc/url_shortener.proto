@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package url_shortener;
+
+option go_package = "url-shortener/internal/grpc";
+
+service URLShortener {
+  // Creates a short URL
+  rpc CreateShortURL (CreateShortURLRequest) returns (CreateShortURLResponse) {}
+
+  // Gets the original URL by short URL
+  rpc GetOriginalURL (GetOriginalURLRequest) returns (GetOriginalURLResponse) {}
+}
+
+message CreateShortURLRequest {
+  string original_url = 1;
+  string custom_alias = 2; // optional custom alias
+}
+
+message CreateShortURLResponse {
+  string short_url = 1;
+}
+
+message GetOriginalURLRequest {
+  string short_url = 1;
+}
+
+message GetOriginalURLResponse {
+  string original_url = 1;
+}

@@ -1,0 +1,6 @@
+env: "prod"
+storage_type: "postgres" # memory or postgres
+http_server:
+  address: ":8082" # gRPC port
+  timeout: 4s
+  idle_timeout: 30s
