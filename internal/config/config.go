@@ -9,13 +9,14 @@ import (
 )
 
 type Config struct {
-	Env         string `yaml:"env" env-default:"local"`
-	StorageType string `yaml:"storage_type" env-default:"memory"` // "memory" or "postgres"
-	HTTPServer  `yaml:"http_server"`
+	Env            string `yaml:"env" env-default:"local"`
+	StorageType    string `yaml:"storage_type" env-default:"memory"` // "memory" or "postgres"
+	HTTPServer     `yaml:"http_server"`
+	ShortURLLength int `yaml:"short_url_length" env-default:"10"`
 }
 
 type HTTPServer struct {
-	Address     string        `yaml:"address" env-default:"localhost:8080"`
+	Address     string        `yaml:"address" env-default:"localhost:8082"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
 }

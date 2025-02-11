@@ -17,6 +17,7 @@ import (
 	mygrpc "url-shortener/internal/grpc"
 	"url-shortener/internal/lib/logger/handlers/slogpretty"
 	"url-shortener/internal/lib/logger/sl"
+	"url-shortener/internal/service"
 	"url-shortener/internal/storage"
 	"url-shortener/internal/storage/memory"
 	"url-shortener/internal/storage/postgres"
@@ -68,8 +69,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize service
+	urlShortenerService := service.NewURLShortenerService(urlStorage, cfg.ShortURLLength)
+
 	grpcServer := grpc.NewServer()
-	urlShortenerServer := mygrpc.NewURLShortenerServer(urlStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(urlShortenerService)
 	mygrpc.RegisterURLShortenerServer(grpcServer, urlShortenerServer)
 	reflection.Register(grpcServer)
 

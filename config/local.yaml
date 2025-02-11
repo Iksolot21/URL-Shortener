@@ -1,7 +1,7 @@
-env: "local"           
-storage_type: "memory"  # Тип хранилища: memory или postgres
-
+env: "local"
+storage_type: "postgres" # memory or postgres
 http_server:
-  address: ":8082"      
-  timeout: "4s"         
-  idle_timeout: "60s" 
+  address: ":8082"
+  timeout: "4s"
+  idle_timeout: "60s"
+short_url_length: 10

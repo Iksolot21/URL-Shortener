@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	mygrpc "url-shortener/internal/grpc"
+	"url-shortener/internal/service"
 	"url-shortener/internal/storage"
 	"url-shortener/internal/storage/memory"
 	"url-shortener/internal/storage/postgres"
@@ -79,6 +80,11 @@ func newTestClient(t *testing.T, lis *bufconn.Listener) (mygrpc.URLShortenerClie
 	return client, close
 }
 
+func newTestService(t *testing.T, storage storage.URLSaverURLGetter) *service.URLShortenerService {
+	t.Helper()
+	return service.NewURLShortenerService(storage, 10)
+}
+
 func TestMain(m *testing.M) {
 	err := godotenv.Load("./.env")
 	if err != nil {
@@ -97,7 +103,7 @@ func TestCreateShortURL_Postgres(t *testing.T) {
 	}()
 
 	s := grpc.NewServer()
-	urlShortenerServer := mygrpc.NewURLShortenerServer(pgStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
@@ -143,7 +149,7 @@ func TestGetOriginalURL_Postgres(t *testing.T) {
 		t.Fatalf("Failed to save url to database %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(pgStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
@@ -180,7 +186,7 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 		t.Fatalf("Failed to save url to database %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(pgStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
@@ -210,7 +216,7 @@ func TestCreateShortURL_InMemory(t *testing.T) {
 	memStorage := memory.New()
 
 	s := grpc.NewServer()
-	urlShortenerServer := mygrpc.NewURLShortenerServer(memStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
@@ -251,7 +257,7 @@ func TestGetOriginalURL_InMemory(t *testing.T) {
 		t.Fatalf("Failed to save url to memory storage %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(memStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
@@ -283,7 +289,7 @@ func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
 		t.Fatalf("Failed to save url to memory storage %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(memStorage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 
 	lis := newBufConnListener(t, s)
