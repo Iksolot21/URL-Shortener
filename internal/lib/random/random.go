@@ -1,22 +1,20 @@
 package random
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"math/big"
 )
 
-// NewRandomString generates random string with given size.
-func NewRandomString(size int) string {
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 
-	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-		"abcdefghijklmnopqrstuvwxyz" +
-		"0123456789")
-
-	b := make([]rune, size)
+func NewRandomString(length int) string {
+	b := make([]byte, length)
 	for i := range b {
-		b[i] = chars[rnd.Intn(len(chars))]
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphabet))))
+		if err != nil {
+			panic(err)
+		}
+		b[i] = alphabet[n.Int64()]
 	}
-
 	return string(b)
 }

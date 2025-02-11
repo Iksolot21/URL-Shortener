@@ -1,0 +1,7 @@
+env: "test"
+storage_type: "memory" # memory or postgres
+http_server:
+  address: ":8083" # gRPC port
+  timeout: "4s"
+  idle_timeout: "30s"
+short_url_length: 10

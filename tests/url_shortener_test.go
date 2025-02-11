@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -9,12 +10,12 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	"url-shortener/internal/config"
 	mygrpc "url-shortener/internal/grpc"
 	"url-shortener/internal/service"
 	"url-shortener/internal/storage"
@@ -54,14 +55,20 @@ func cleanDatabase(pgStorage *postgres.PostgresStorage) error {
 	return err
 }
 
-func newBufConnListener(t *testing.T, server *grpc.Server) *bufconn.Listener {
+func newBufConnListener(t *testing.T, server *grpc.Server) (*bufconn.Listener, <-chan error) {
+	t.Helper()
+
 	lis := bufconn.Listen(bufSize)
+	errChan := make(chan error, 1) // Buffered channel to prevent blocking
+
 	go func() {
 		if err := server.Serve(lis); err != nil {
-			t.Fatalf("Server exited with error: %v", err)
+			errChan <- fmt.Errorf("Server exited with error: %w", err) // Send error to channel
 		}
+		close(errChan) // Close the channel when server exits
 	}()
-	return lis
+
+	return lis, errChan
 }
 
 func newTestClient(t *testing.T, lis *bufconn.Listener) (mygrpc.URLShortenerClient, func()) {
@@ -82,34 +89,46 @@ func newTestClient(t *testing.T, lis *bufconn.Listener) (mygrpc.URLShortenerClie
 
 func newTestService(t *testing.T, storage storage.URLSaverURLGetter) *service.URLShortenerService {
 	t.Helper()
-	return service.NewURLShortenerService(storage, 10)
+	cfg := config.MustLoad()
+	return service.NewURLShortenerService(storage, cfg.ShortURLLength)
+}
+func newTestGRPCServer(t *testing.T, storage storage.URLSaverURLGetter) *grpc.Server {
+	t.Helper()
+	s := grpc.NewServer()
+	testService := newTestService(t, storage)
+	urlShortenerServer := mygrpc.NewURLShortenerServer(testService)
+	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
+	return s
 }
 
 func TestMain(m *testing.M) {
-	err := godotenv.Load("./.env")
+	err := godotenv.Load("../.env")
 	if err != nil {
 		log.Printf("no .env file found")
 	}
+	os.Setenv("CONFIG_PATH", "../config/test.yaml")
 	os.Exit(m.Run())
 }
 
 func TestCreateShortURL_Postgres(t *testing.T) {
-
 	pgStorage := newTestPostgresStorage(t)
 	defer func() {
 		if err := pgStorage.Close(); err != nil {
 			t.Fatalf("failed to close database connection: %v", err)
 		}
 	}()
+	s := newTestGRPCServer(t, pgStorage)
 
-	s := grpc.NewServer()
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	originalURL := "https://example.com"
 	resp, err := client.CreateShortURL(context.Background(), &mygrpc.CreateShortURLRequest{OriginalUrl: originalURL})
@@ -139,7 +158,7 @@ func TestGetOriginalURL_Postgres(t *testing.T) {
 		}
 	}()
 
-	s := grpc.NewServer()
+	s := newTestGRPCServer(t, pgStorage)
 
 	originalURL := "https://example.com"
 	shortURL := "test"
@@ -149,13 +168,16 @@ func TestGetOriginalURL_Postgres(t *testing.T) {
 		t.Fatalf("Failed to save url to database %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	resp, err := client.GetOriginalURL(context.Background(), &mygrpc.GetOriginalURLRequest{ShortUrl: shortURL})
 
@@ -176,7 +198,7 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 		}
 	}()
 
-	s := grpc.NewServer()
+	s := newTestGRPCServer(t, pgStorage)
 
 	originalURL := "https://example.com"
 	shortURL := "existing"
@@ -186,13 +208,16 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 		t.Fatalf("Failed to save url to database %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, pgStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	newOriginalURL := "https://example.org"
 	customAlias := "existing"
@@ -215,14 +240,17 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 func TestCreateShortURL_InMemory(t *testing.T) {
 	memStorage := memory.New()
 
-	s := grpc.NewServer()
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	s := newTestGRPCServer(t, memStorage)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	originalURL := "https://example.com"
 	resp, err := client.CreateShortURL(context.Background(), &mygrpc.CreateShortURLRequest{OriginalUrl: originalURL})
@@ -247,7 +275,7 @@ func TestCreateShortURL_InMemory(t *testing.T) {
 func TestGetOriginalURL_InMemory(t *testing.T) {
 	memStorage := memory.New()
 
-	s := grpc.NewServer()
+	s := newTestGRPCServer(t, memStorage)
 
 	originalURL := "https://example.com"
 	shortURL := "test"
@@ -257,13 +285,16 @@ func TestGetOriginalURL_InMemory(t *testing.T) {
 		t.Fatalf("Failed to save url to memory storage %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	resp, err := client.GetOriginalURL(context.Background(), &mygrpc.GetOriginalURLRequest{ShortUrl: shortURL})
 
@@ -279,7 +310,7 @@ func TestGetOriginalURL_InMemory(t *testing.T) {
 func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
 	memStorage := memory.New()
 
-	s := grpc.NewServer()
+	s := newTestGRPCServer(t, memStorage)
 
 	originalURL := "https://example.com"
 	shortURL := "existing"
@@ -289,16 +320,19 @@ func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
 		t.Fatalf("Failed to save url to memory storage %v", err)
 	}
 
-	urlShortenerServer := mygrpc.NewURLShortenerServer(newTestService(t, memStorage))
-	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
-
-	lis := newBufConnListener(t, s)
+	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
 
 	newOriginalURL := "https://example.org"
 	customAlias := "existing"
+	select {
+	case err := <-errChan:
+		t.Fatalf("gRPC server failed: %v", err)
+	default:
+		// No error yet, continue with the test
+	}
 
 	_, err = client.CreateShortURL(context.Background(), &mygrpc.CreateShortURLRequest{OriginalUrl: newOriginalURL, CustomAlias: customAlias})
 	st, ok := status.FromError(err)
