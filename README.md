@@ -67,8 +67,7 @@ docker-compose up url-shortener-local-postgres -d
 
 Сервис использует переменные окружения для конфигурации:
 
-*   `CONFIG_PATH`: Путь к файлу конфигурации (`config/local.yaml` или `config/prod.yaml`). Если не указан, используется `./config/local.yaml`.
-*   `DATABASE_URL`: Строка подключения к базе данных PostgreSQL (пример: `"postgres://user:password@host:port/database?sslmode=disable"`). Используется, только если `STORAGE_TYPE` установлено в `postgres`.
+*   `CONFIG_PATH`: Путь к файлу конфигурации (`config/local-memory.yaml` или `config/local-postgres.yaml`). Если не указан, используется `./config/local-memory.yaml`.
 
 ## Алгоритм генерации коротких ссылок
 
