@@ -70,8 +70,8 @@ grpcurl -plaintext -d "{\"original_url\": \"https://www.example.com\"}" localhos
 
 *   **Получение оригинального URL:**
 
-    ```bash
-    grpcurl -plaintext -d "{\"short_url\": \"GdII4Gm7qI\"}" localhost:8082 url_shortener.URLShortener.GetOriginalURL
+```bash
+grpcurl -plaintext -d "{\"short_url\": \"GdII4Gm7qI\"}" localhost:8082 url_shortener.URLShortener.GetOriginalURL
     ```
 Вывод:
 ```bash
