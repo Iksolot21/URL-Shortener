@@ -8,8 +8,8 @@ import (
 
 type MemoryStorage struct {
 	mu      sync.RWMutex
-	data    map[string]string
-	revData map[string]string
+	data    map[string]string // shortURL -> originalURL
+	revData map[string]string // originalURL -> shortURL
 }
 
 func New() *MemoryStorage {
@@ -26,7 +26,6 @@ func (s *MemoryStorage) SaveURL(originalURL string, shortURL string) error {
 	if _, ok := s.data[shortURL]; ok {
 		return storage.ErrURLExists
 	}
-
 	if _, ok := s.revData[originalURL]; ok {
 		return storage.ErrURLExists
 	}
@@ -41,10 +40,21 @@ func (s *MemoryStorage) GetURL(shortURL string) (string, error) {
 	defer s.mu.RUnlock()
 
 	originalURL, ok := s.data[shortURL]
-
 	if !ok {
 		return "", storage.ErrURLNotFound
 	}
 
 	return originalURL, nil
+}
+
+func (s *MemoryStorage) GetShortURL(originalURL string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	shortURL, ok := s.revData[originalURL]
+	if !ok {
+		return "", storage.ErrURLNotFound
+	}
+
+	return shortURL, nil
 }

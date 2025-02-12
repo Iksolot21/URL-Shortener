@@ -10,4 +10,5 @@ var (
 type URLSaverURLGetter interface {
 	SaveURL(urlToSave string, alias string) error
 	GetURL(alias string) (string, error)
+	GetShortURL(originalURL string) (string, error)
 }

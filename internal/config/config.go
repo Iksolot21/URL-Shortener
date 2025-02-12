@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	Env            string `yaml:"env" env-default:"local"`
-	StorageType    string `yaml:"storage_type" env-default:"memory"` // "memory" or "postgres"
+	StorageType    string `yaml:"storage_type" env-default:"memory"`
 	HTTPServer     `yaml:"http_server"`
 	ShortURLLength int    `yaml:"short_url_length" env-default:"10"`
 	PostgresURL    string `yaml:"postgres_url" env-default:"postgres://postgres:postgres@localhost:5432/url_shortener?sslmode=disable"`

@@ -12,7 +12,7 @@ import (
 var (
 	ErrURLNotFound        = errors.New("url not found")
 	ErrURLExists          = errors.New("url already exists")
-	ErrAliasAlreadyExists = errors.New("custom alias already exists")
+	ErrAliasAlreadyExists = errors.New("custom alias already exists") // New error
 	ErrInternal           = errors.New("internal error")
 )
 
@@ -33,12 +33,22 @@ func (s *URLShortenerService) CreateShortURL(ctx context.Context, originalURL st
 		return "", errors.New("original_url is required")
 	}
 
-	var shortURL string
+	// Check if URL already exists
+	shortURL, err := s.getExistingShortURL(ctx, originalURL)
+	if err == nil {
+		return shortURL, nil // Return existing short URL
+	}
+	if !errors.Is(err, ErrURLNotFound) {
+		log.Printf("failed to get existing short URL: %v", err)
+		return "", ErrInternal
+	}
 
 	if customAlias != "" {
+		// User provided a custom alias
+		// Check if the alias is already taken
 		_, err := s.storage.GetURL(customAlias)
 		if err == nil {
-			return "", ErrAliasAlreadyExists
+			return "", ErrAliasAlreadyExists //Custom alias already exists
 		}
 
 		if !errors.Is(err, storage.ErrURLNotFound) {
@@ -48,16 +58,23 @@ func (s *URLShortenerService) CreateShortURL(ctx context.Context, originalURL st
 
 		shortURL = customAlias
 	} else {
+		// Generate a random short URL
 		shortURL = s.generateUniqueShortURL()
 	}
 
-	err := s.storage.SaveURL(originalURL, shortURL)
+	err = s.storage.SaveURL(originalURL, shortURL)
 	if err != nil {
 		if errors.Is(err, storage.ErrURLExists) {
-			return "", ErrURLExists
+			// Double check if short url exists. If exists, return shortUrl
+			shortURL, err := s.getExistingShortURL(ctx, originalURL)
+			if err == nil {
+				return shortURL, nil // Return existing short URL
+			}
+			log.Printf("failed to get existing short URL: %v", err)
+			return "", ErrInternal // Internal error
 		}
 		log.Printf("failed to save url: %v", err)
-		return "", ErrInternal
+		return "", ErrInternal //Internal error
 	}
 
 	return shortURL, nil
@@ -71,32 +88,48 @@ func (s *URLShortenerService) GetOriginalURL(ctx context.Context, shortURL strin
 	originalURL, err := s.storage.GetURL(shortURL)
 	if err != nil {
 		if errors.Is(err, storage.ErrURLNotFound) {
-			return "", errors.New("short_url not found")
+			return "", ErrURLNotFound // URL not found
 		}
 		log.Printf("failed to get url: %v", err)
-		return "", errors.New("internal error")
+		return "", ErrInternal // Internal error
 	}
 
 	return originalURL, nil
 }
 
 func (s *URLShortenerService) generateUniqueShortURL() string {
-	const maxAttempts = 10
+	const maxAttempts = 10 // Prevent infinite loops
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		shortURL := random.NewRandomString(s.shortURLLength)
 
+		// Check if short URL already exists
 		_, err := s.storage.GetURL(shortURL)
 		if errors.Is(err, storage.ErrURLNotFound) {
-			return shortURL
+			return shortURL // Found a unique URL
 		}
 
 		if err != nil {
 			log.Printf("failed to get URL: %v", err)
-			continue
+			continue // Try again
 		}
 
+		// URL already exists, generate another one
 	}
 
+	// If we reach here, it means we couldn't generate a unique URL after maxAttempts
 	panic("failed to generate unique short URL")
+}
+
+func (s *URLShortenerService) getExistingShortURL(ctx context.Context, originalURL string) (string, error) {
+	shortURL, err := s.storage.GetShortURL(originalURL)
+	if err != nil {
+		if errors.Is(err, storage.ErrURLNotFound) {
+			return "", ErrURLNotFound
+		}
+		log.Printf("failed to get short URL: %v", err)
+		return "", ErrInternal
+	}
+
+	return shortURL, nil
 }

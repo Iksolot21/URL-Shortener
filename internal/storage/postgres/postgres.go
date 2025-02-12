@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 	"sync"
 
 	"github.com/lib/pq"
@@ -20,13 +18,6 @@ type PostgresStorage struct {
 }
 
 func New(dataSourceName string) (*PostgresStorage, error) {
-	if dataSourceName == "" {
-		dataSourceName = os.Getenv("DATABASE_URL")
-		if dataSourceName == "" {
-			return nil, errors.New("DATABASE_URL is not set")
-		}
-	}
-
 	db, err := sql.Open("postgres", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -40,7 +31,7 @@ func New(dataSourceName string) (*PostgresStorage, error) {
 	_, err = db.ExecContext(context.Background(), `
 		CREATE TABLE IF NOT EXISTS urls (
 			short_url TEXT PRIMARY KEY,
-			original_url TEXT NOT NULL
+			original_url TEXT NOT NULL UNIQUE
 		);
 	`)
 	if err != nil {
@@ -54,16 +45,13 @@ func (s *PostgresStorage) SaveURL(urlToSave string, alias string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	log.Printf("Saving URL: originalURL=%s, shortURL=%s", urlToSave, alias)
-
 	_, err := s.Db.ExecContext(context.Background(),
 		"INSERT INTO urls (short_url, original_url) VALUES ($1, $2)",
 		alias, urlToSave,
 	)
 	if err != nil {
-		log.Printf("Error inserting URL: %v", err)
 		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" { // unique_violation
 			return storage.ErrURLExists
 		}
 		return fmt.Errorf("failed to insert url: %w", err)
@@ -87,6 +75,23 @@ func (s *PostgresStorage) GetURL(alias string) (string, error) {
 	}
 
 	return originalURL, nil
+}
+
+func (s *PostgresStorage) GetShortURL(originalURL string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var shortURL string
+	err := s.Db.QueryRowContext(context.Background(),
+		"SELECT short_url FROM urls WHERE original_url = $1", originalURL).Scan(&shortURL)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", storage.ErrURLNotFound
+		}
+		return "", fmt.Errorf("failed to get short url: %w", err)
+	}
+
+	return shortURL, nil
 }
 
 func (s *PostgresStorage) Close() error {

@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/joho/godotenv"
 	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -25,17 +24,10 @@ import (
 
 const (
 	envLocal = "local"
-	envDev   = "dev"
-	envProd  = "prod"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Printf("no .env file found")
-	}
-
 	cfg := config.MustLoad()
-
 	slogLogger := setupLogger(cfg.Env)
 
 	slogLogger.Info(
@@ -54,11 +46,6 @@ func main() {
 		slogLogger.Info("using postgres storage")
 		dataSourceName := cfg.PostgresURL
 
-		if dataSourceName == "" {
-			slogLogger.Error("DATABASE_URL is not set in local-postgres.yaml")
-			os.Exit(1)
-		}
-
 		postgresStorage, err := postgres.New(dataSourceName)
 		if err != nil {
 			slogLogger.Error("failed to init postgres storage", sl.Err(err))
@@ -70,7 +57,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize service
 	urlShortenerService := service.NewURLShortenerService(urlStorage, cfg.ShortURLLength)
 
 	grpcServer := grpc.NewServer()
@@ -90,7 +76,6 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -108,14 +93,6 @@ func setupLogger(env string) *slog.Logger {
 	switch env {
 	case envLocal:
 		log = setupPrettySlog()
-	case envDev:
-		log = slog.New(
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}),
-		)
-	case envProd:
-		log = slog.New(
-			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
-		)
 	default:
 		log = slog.New(
 			slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),

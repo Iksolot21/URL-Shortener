@@ -1,8 +1,0 @@
-env: local
-storage_type: postgres
-postgres_url: "postgres://postgres:postgres@postgres:5432/url_shortener?sslmode=disable"
-http_server:
-  address: ":8082"
-  timeout: 4s
-  idle_timeout: 60s
-short_url_length: 10
