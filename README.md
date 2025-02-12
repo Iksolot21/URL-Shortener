@@ -61,6 +61,7 @@ docker-compose up url-shortener-local-postgres -d
 ```bash
 grpcurl -plaintext -d "{\"original_url\": \"https://www.example.com\"}" localhost:8082 url_shortener.URLShortener.CreateShortURL
 ```
+
 Вывод:
 ```bash
 {
@@ -72,7 +73,7 @@ grpcurl -plaintext -d "{\"original_url\": \"https://www.example.com\"}" localhos
 
 ```bash
 grpcurl -plaintext -d "{\"short_url\": \"GdII4Gm7qI\"}" localhost:8082 url_shortener.URLShortener.GetOriginalURL
-    ```
+```
 Вывод:
 ```bash
 {
