@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
@@ -15,10 +15,6 @@ WORKDIR /app
 
 COPY --from=builder /app/url-shortener .
 COPY config ./config
-
-# Set environment variables
-ENV STORAGE_TYPE=memory
-#ENV DATABASE_URL="postgres://user:password@host:port/database?sslmode=disable"
 
 EXPOSE 8082
 

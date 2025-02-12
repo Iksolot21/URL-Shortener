@@ -12,7 +12,8 @@ type Config struct {
 	Env            string `yaml:"env" env-default:"local"`
 	StorageType    string `yaml:"storage_type" env-default:"memory"` // "memory" or "postgres"
 	HTTPServer     `yaml:"http_server"`
-	ShortURLLength int `yaml:"short_url_length" env-default:"10"`
+	ShortURLLength int    `yaml:"short_url_length" env-default:"10"`
+	PostgresURL    string `yaml:"postgres_url" env-default:"postgres://postgres:postgres@localhost:5432/url_shortener?sslmode=disable"`
 }
 
 type HTTPServer struct {
@@ -25,7 +26,7 @@ func MustLoad() *Config {
 	configPath := os.Getenv("CONFIG_PATH")
 
 	if configPath == "" {
-		configPath = "./config/local.yaml"
+		configPath = "./config/local-memory.yaml"
 		log.Printf("CONFIG_PATH is not set, using default path: %s", configPath)
 	}
 

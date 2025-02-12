@@ -52,9 +52,10 @@ func main() {
 		urlStorage = memory.New()
 	case "postgres":
 		slogLogger.Info("using postgres storage")
-		dataSourceName := os.Getenv("DATABASE_URL")
+		dataSourceName := cfg.PostgresURL
+
 		if dataSourceName == "" {
-			slogLogger.Error("DATABASE_URL is not set")
+			slogLogger.Error("DATABASE_URL is not set in local-postgres.yaml")
 			os.Exit(1)
 		}
 
@@ -89,6 +90,7 @@ func main() {
 		}
 	}()
 
+	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

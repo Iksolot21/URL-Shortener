@@ -1,7 +1,8 @@
-env: "test"
-storage_type: "memory" # memory or postgres
+env: test
+storage_type: memory
+postgres_url: "postgres://testik:test@localhost:5432/url_shortener_test?sslmode=disable"
 http_server:
-  address: ":8083" # gRPC port
-  timeout: "4s"
-  idle_timeout: "30s"
+  address: ":8083"
+  timeout: 4s
+  idle_timeout: 30s
 short_url_length: 10

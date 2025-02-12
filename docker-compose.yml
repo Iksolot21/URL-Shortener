@@ -1,25 +1,38 @@
-version: "3.8"
+version: "3.9"
 services:
-  url-shortener:
+  url-shortener-local-memory:
     image: url-shortener
-    ports:
-      - "8082:8082"
+    build: .
+    ports: ["8082:8082"]
     environment:
-      STORAGE_TYPE: postgres
-      DATABASE_URL: "postgres://myuser:mypassword@db:5432/url_shortener?sslmode=disable"
+      CONFIG_PATH: "./config/local-memory.yaml"
+    restart: always
+
+  url-shortener-local-postgres:
+    image: url-shortener
+    build: .
     depends_on:
-      - db
-
-  db:
-    image: postgres:latest
+      postgres:
+        condition: service_healthy
+    ports: ["8082:8082"]
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: url_shortener
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
+      CONFIG_PATH: "./config/local-postgres.yaml"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-url_shortener}?sslmode=disable"
 
+  postgres:
+    image: postgres:latest
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-url_shortener}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-url_shortener}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 volumes:
-  db_data:
+  pgdata:

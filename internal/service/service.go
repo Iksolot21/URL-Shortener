@@ -12,7 +12,7 @@ import (
 var (
 	ErrURLNotFound        = errors.New("url not found")
 	ErrURLExists          = errors.New("url already exists")
-	ErrAliasAlreadyExists = errors.New("custom alias already exists") // New error
+	ErrAliasAlreadyExists = errors.New("custom alias already exists")
 	ErrInternal           = errors.New("internal error")
 )
 
@@ -36,31 +36,28 @@ func (s *URLShortenerService) CreateShortURL(ctx context.Context, originalURL st
 	var shortURL string
 
 	if customAlias != "" {
-		// User provided a custom alias
-		// Check if the alias is already taken
 		_, err := s.storage.GetURL(customAlias)
 		if err == nil {
-			return "", ErrAliasAlreadyExists // Custom alias already exists
+			return "", ErrAliasAlreadyExists
 		}
 
 		if !errors.Is(err, storage.ErrURLNotFound) {
 			log.Printf("failed to get URL: %v", err)
-			return "", ErrInternal // Internal error
+			return "", ErrInternal
 		}
 
 		shortURL = customAlias
 	} else {
-		// Generate a random short URL
 		shortURL = s.generateUniqueShortURL()
 	}
 
 	err := s.storage.SaveURL(originalURL, shortURL)
 	if err != nil {
 		if errors.Is(err, storage.ErrURLExists) {
-			return "", ErrURLExists // URL already exists
+			return "", ErrURLExists
 		}
 		log.Printf("failed to save url: %v", err)
-		return "", ErrInternal // Internal error
+		return "", ErrInternal
 	}
 
 	return shortURL, nil
@@ -84,20 +81,19 @@ func (s *URLShortenerService) GetOriginalURL(ctx context.Context, shortURL strin
 }
 
 func (s *URLShortenerService) generateUniqueShortURL() string {
-	const maxAttempts = 10 // Prevent infinite loops
+	const maxAttempts = 10
 
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		shortURL := random.NewRandomString(s.shortURLLength)
 
-		// Check if short URL already exists
 		_, err := s.storage.GetURL(shortURL)
 		if errors.Is(err, storage.ErrURLNotFound) {
-			return shortURL // Found a unique URL
+			return shortURL
 		}
 
 		if err != nil {
 			log.Printf("failed to get URL: %v", err)
-			continue // Try again
+			continue
 		}
 
 	}

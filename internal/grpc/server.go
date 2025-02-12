@@ -16,15 +16,14 @@ import (
 	"url-shortener/internal/storage"
 )
 
-// urlShortenerServer реализует интерфейс URLShortenerServer, сгенерированный protoc
 type urlShortenerServer struct {
-	srv *service.URLShortenerService // Use pointer here
+	srv *service.URLShortenerService
 	UnimplementedURLShortenerServer
 	mu     sync.Mutex
 	urlMap map[string]string
 }
 
-func NewURLShortenerServer(srv *service.URLShortenerService) URLShortenerServer { // Accepts service interface
+func NewURLShortenerServer(srv *service.URLShortenerService) URLShortenerServer {
 	return &urlShortenerServer{
 		srv:                             srv,
 		UnimplementedURLShortenerServer: UnimplementedURLShortenerServer{},
@@ -37,14 +36,17 @@ func (s *urlShortenerServer) CreateShortURL(ctx context.Context, req *CreateShor
 	originalURL := req.OriginalUrl
 	customAlias := req.CustomAlias
 
-	shortURL, err := s.srv.CreateShortURL(ctx, originalURL, customAlias) // Call service method
+	shortURL, err := s.srv.CreateShortURL(ctx, originalURL, customAlias)
 	if err != nil {
 		log.Printf("failed to create short url: %v", err)
-		if errors.Is(err, storage.ErrURLNotFound) {
+		if errors.Is(err, service.ErrURLNotFound) {
 			return nil, status.Error(codes.NotFound, "short_url not found")
 		}
-		if errors.Is(err, storage.ErrURLExists) {
+		if errors.Is(err, service.ErrURLExists) {
 			return nil, status.Error(codes.AlreadyExists, "url already exists")
+		}
+		if errors.Is(err, service.ErrAliasAlreadyExists) {
+			return nil, status.Error(codes.AlreadyExists, "custom alias already exists")
 		}
 		return nil, status.Error(codes.Internal, "internal error")
 	}
@@ -55,7 +57,7 @@ func (s *urlShortenerServer) CreateShortURL(ctx context.Context, req *CreateShor
 func (s *urlShortenerServer) GetOriginalURL(ctx context.Context, req *GetOriginalURLRequest) (*GetOriginalURLResponse, error) {
 	shortURL := req.ShortUrl
 
-	originalURL, err := s.srv.GetOriginalURL(ctx, shortURL) // Call service method
+	originalURL, err := s.srv.GetOriginalURL(ctx, shortURL)
 	if err != nil {
 		log.Printf("failed to get original url: %v", err)
 		if errors.Is(err, storage.ErrURLNotFound) {
@@ -69,15 +71,14 @@ func (s *urlShortenerServer) GetOriginalURL(ctx context.Context, req *GetOrigina
 
 func (s *urlShortenerServer) mustEmbedUnimplementedURLShortenerServer() {}
 
-// StartGRPCServer starts the gRPC server.
-func StartGRPCServer(grpcAddress string, urlService *service.URLShortenerService) error { // Accepts service interface
+func StartGRPCServer(grpcAddress string, urlService *service.URLShortenerService) error {
 	lis, err := net.Listen("tcp", grpcAddress)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 
 	s := grpc.NewServer()
-	srv := NewURLShortenerServer(urlService) // Create gRPC server with service
+	srv := NewURLShortenerServer(urlService)
 	RegisterURLShortenerServer(s, srv)
 
 	log.Printf("gRPC server listening on %s", grpcAddress)

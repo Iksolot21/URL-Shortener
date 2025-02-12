@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -25,17 +24,9 @@ import (
 
 const bufSize = 1024 * 1024
 
-const (
-	testDBConnectionStringEnv = "TEST_DATABASE_URL"
-)
-
-func newTestPostgresStorage(t *testing.T) *postgres.PostgresStorage {
+func newTestPostgresStorage(t *testing.T, cfg config.Config) *postgres.PostgresStorage {
 	t.Helper()
-	connectionString := os.Getenv(testDBConnectionStringEnv)
-	if connectionString == "" {
-		t.Fatalf("must set %s env var", testDBConnectionStringEnv)
-	}
-
+	connectionString := cfg.PostgresURL
 	log.Printf("TEST_DATABASE_URL: %s", connectionString)
 
 	pgStorage, err := postgres.New(connectionString)
@@ -56,16 +47,14 @@ func cleanDatabase(pgStorage *postgres.PostgresStorage) error {
 }
 
 func newBufConnListener(t *testing.T, server *grpc.Server) (*bufconn.Listener, <-chan error) {
-	t.Helper()
-
 	lis := bufconn.Listen(bufSize)
-	errChan := make(chan error, 1) // Buffered channel to prevent blocking
+	errChan := make(chan error, 1)
 
 	go func() {
 		if err := server.Serve(lis); err != nil {
-			errChan <- fmt.Errorf("Server exited with error: %w", err) // Send error to channel
+			errChan <- fmt.Errorf("Server exited with error: %w", err)
 		}
-		close(errChan) // Close the channel when server exits
+		close(errChan)
 	}()
 
 	return lis, errChan
@@ -87,38 +76,34 @@ func newTestClient(t *testing.T, lis *bufconn.Listener) (mygrpc.URLShortenerClie
 	return client, close
 }
 
-func newTestService(t *testing.T, storage storage.URLSaverURLGetter) *service.URLShortenerService {
+func newTestService(t *testing.T, storage storage.URLSaverURLGetter, cfg config.Config) *service.URLShortenerService {
 	t.Helper()
-	cfg := config.MustLoad()
 	return service.NewURLShortenerService(storage, cfg.ShortURLLength)
 }
-func newTestGRPCServer(t *testing.T, storage storage.URLSaverURLGetter) *grpc.Server {
+func newTestGRPCServer(t *testing.T, storage storage.URLSaverURLGetter, cfg config.Config) *grpc.Server {
 	t.Helper()
 	s := grpc.NewServer()
-	testService := newTestService(t, storage)
+	testService := newTestService(t, storage, cfg)
 	urlShortenerServer := mygrpc.NewURLShortenerServer(testService)
 	mygrpc.RegisterURLShortenerServer(s, urlShortenerServer)
 	return s
 }
 
 func TestMain(m *testing.M) {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Printf("no .env file found")
-	}
 	os.Setenv("CONFIG_PATH", "../config/test.yaml")
+
 	os.Exit(m.Run())
 }
-
 func TestCreateShortURL_Postgres(t *testing.T) {
-	pgStorage := newTestPostgresStorage(t)
+	cfg := config.MustLoad()
+
+	pgStorage := newTestPostgresStorage(t, *cfg)
 	defer func() {
 		if err := pgStorage.Close(); err != nil {
 			t.Fatalf("failed to close database connection: %v", err)
 		}
 	}()
-	s := newTestGRPCServer(t, pgStorage)
-
+	s := newTestGRPCServer(t, pgStorage, *cfg)
 	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
@@ -127,7 +112,6 @@ func TestCreateShortURL_Postgres(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
 	}
 
 	originalURL := "https://example.com"
@@ -148,17 +132,19 @@ func TestCreateShortURL_Postgres(t *testing.T) {
 	if url != originalURL {
 		t.Errorf("URL in storage is not the same as original URL")
 	}
+	t.Logf("TestCreateShortURL_Postgres passed")
 }
 
 func TestGetOriginalURL_Postgres(t *testing.T) {
-	pgStorage := newTestPostgresStorage(t)
+	cfg := config.MustLoad()
+	pgStorage := newTestPostgresStorage(t, *cfg)
 	defer func() {
 		if err := pgStorage.Close(); err != nil {
 			t.Fatalf("failed to close database connection: %v", err)
 		}
 	}()
 
-	s := newTestGRPCServer(t, pgStorage)
+	s := newTestGRPCServer(t, pgStorage, *cfg)
 
 	originalURL := "https://example.com"
 	shortURL := "test"
@@ -176,7 +162,6 @@ func TestGetOriginalURL_Postgres(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
 	}
 
 	resp, err := client.GetOriginalURL(context.Background(), &mygrpc.GetOriginalURLRequest{ShortUrl: shortURL})
@@ -188,17 +173,19 @@ func TestGetOriginalURL_Postgres(t *testing.T) {
 	if resp.OriginalUrl != originalURL {
 		t.Errorf("OriginalURL should be https://example.com, but got %s", resp.OriginalUrl)
 	}
+	t.Logf("TestGetOriginalURL_Postgres passed")
 }
 
 func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
-	pgStorage := newTestPostgresStorage(t)
+	cfg := config.MustLoad()
+	pgStorage := newTestPostgresStorage(t, *cfg)
 	defer func() {
 		if err := pgStorage.Close(); err != nil {
 			t.Fatalf("failed to close database connection: %v", err)
 		}
 	}()
 
-	s := newTestGRPCServer(t, pgStorage)
+	s := newTestGRPCServer(t, pgStorage, *cfg)
 
 	originalURL := "https://example.com"
 	shortURL := "existing"
@@ -216,7 +203,6 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
 	}
 
 	newOriginalURL := "https://example.org"
@@ -235,12 +221,15 @@ func TestCreateShortURL_CustomAliasAlreadyExists_Postgres(t *testing.T) {
 	if st.Message() != "custom alias already exists" {
 		t.Errorf("Expected message to be 'custom alias already exists', got %s", st.Message())
 	}
+	t.Logf("TestCreateShortURL_CustomAliasAlreadyExists_Postgres passed")
 }
 
 func TestCreateShortURL_InMemory(t *testing.T) {
+	cfg := config.MustLoad()
+
 	memStorage := memory.New()
 
-	s := newTestGRPCServer(t, memStorage)
+	s := newTestGRPCServer(t, memStorage, *cfg)
 	lis, errChan := newBufConnListener(t, s)
 	client, close := newTestClient(t, lis)
 	defer close()
@@ -249,7 +238,6 @@ func TestCreateShortURL_InMemory(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
 	}
 
 	originalURL := "https://example.com"
@@ -270,12 +258,14 @@ func TestCreateShortURL_InMemory(t *testing.T) {
 	if url != originalURL {
 		t.Errorf("URL in storage is not the same as original URL")
 	}
+	t.Logf("TestCreateShortURL_InMemory passed")
 }
 
 func TestGetOriginalURL_InMemory(t *testing.T) {
+	cfg := config.MustLoad()
 	memStorage := memory.New()
 
-	s := newTestGRPCServer(t, memStorage)
+	s := newTestGRPCServer(t, memStorage, *cfg)
 
 	originalURL := "https://example.com"
 	shortURL := "test"
@@ -293,7 +283,7 @@ func TestGetOriginalURL_InMemory(t *testing.T) {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
+
 	}
 
 	resp, err := client.GetOriginalURL(context.Background(), &mygrpc.GetOriginalURLRequest{ShortUrl: shortURL})
@@ -305,12 +295,15 @@ func TestGetOriginalURL_InMemory(t *testing.T) {
 	if resp.OriginalUrl != originalURL {
 		t.Errorf("OriginalURL should be https://example.com, but got %s", resp.OriginalUrl)
 	}
+	t.Logf("TestGetOriginalURL_InMemory passed")
 }
 
 func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
+	cfg := config.MustLoad()
+
 	memStorage := memory.New()
 
-	s := newTestGRPCServer(t, memStorage)
+	s := newTestGRPCServer(t, memStorage, *cfg)
 
 	originalURL := "https://example.com"
 	shortURL := "existing"
@@ -324,15 +317,14 @@ func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
 	client, close := newTestClient(t, lis)
 	defer close()
 	defer s.GracefulStop()
-
-	newOriginalURL := "https://example.org"
-	customAlias := "existing"
 	select {
 	case err := <-errChan:
 		t.Fatalf("gRPC server failed: %v", err)
 	default:
-		// No error yet, continue with the test
 	}
+
+	newOriginalURL := "https://example.org"
+	customAlias := "existing"
 
 	_, err = client.CreateShortURL(context.Background(), &mygrpc.CreateShortURLRequest{OriginalUrl: newOriginalURL, CustomAlias: customAlias})
 	st, ok := status.FromError(err)
@@ -347,6 +339,7 @@ func TestCreateShortURL_CustomAliasAlreadyExists_InMemory(t *testing.T) {
 	if st.Message() != "custom alias already exists" {
 		t.Errorf("Expected message to be 'custom alias already exists', got %s", st.Message())
 	}
+	t.Logf("TestCreateShortURL_CustomAliasAlreadyExists_InMemory passed")
 }
 
 type mockStorage struct {
