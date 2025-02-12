@@ -56,12 +56,12 @@ docker build -t url-shortener .
 С in-memory хранилищем:
 
 ```bash
-docker-compose --profile memory up -d
+docker-compose up url-shortener-local-memory -d
 ```
 
 С PostgreSQL хранилищем:
 ```bash
-docker-compose --profile postgres up -d
+docker-compose up url-shortener-local-postgres -d
 ```
 ## Конфигурация
 
