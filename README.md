@@ -25,29 +25,6 @@
 
 ## Структура проекта
 
-```
-url-shortener/
-├── .github/
-├── cmd/
-│   └── url-shortener/
-│       └── main.go         # Entry point
-├── config/
-│   ├── local.yaml          # Local config
-│   └── prod.yaml           # Production config
-├── internal/
-│   ├── config/             # Configuration loading
-│   ├── grpc/               # gRPC server
-│   ├── lib/                # Shared libraries
-│   │   └── random/         # Random string generator
-│   ├── service/            # Business logic
-│   └── storage/            # Storage interfaces and implementations
-├── tests/                  # Unit tests
-├── .gitignore
-├── go.mod
-├── go.sum
-└── Makefile               # Build automation
-```
-
 *   **`cmd/url-shortener/main.go`:** Точка входа в приложение. Загружает конфигурацию, инициализирует хранилище и запускает gRPC-сервер.
 *   **`config/`:** Файлы конфигурации в формате YAML.
 *   **`internal/grpc/`:** Определение gRPC API (`.proto` файл) и реализация gRPC-сервера.
@@ -66,75 +43,32 @@ url-shortener/
 
 ## Сборка и запуск
 
-### Локально
 
-1.  Установите Go ([https://go.dev/dl/](https://go.dev/dl/))
-2.  Установите переменные окружения (см. раздел "Конфигурация").
-3.  Соберите приложение:
+### С помощью Docker Compose
 
-    ```bash
-    make build
-    ```
+Соберите Docker-образ:
 
-4.  Запустите приложение:
+```bash
+docker build -t url-shortener .
+```
+Запуск с использованием Docker Compose
 
-    ```bash
-    ./url-shortener
-    ```
+С in-memory хранилищем:
 
-    Для использования PostgreSQL:
+```bash
+docker-compose --profile memory up -d
+```
 
-    ```bash
-    DATABASE_URL="postgres://user:password@host:port/database?sslmode=disable" ./url-shortener
-    ```
-
-### С помощью Docker
-
-1.  Установите Docker ([https://www.docker.com/](https://www.docker.com/))
-2.  Соберите Docker-образ:
-
-    ```bash
-    make docker-build
-    ```
-
-3.  Запустите Docker-контейнер:
-
-    ```bash
-    make docker-run
-    ```
-
-    Для использования PostgreSQL:
-
-    ```bash
-    docker run -p 8082:8082 -e STORAGE_TYPE=postgres -e DATABASE_URL="postgres://user:password@host:port/database?sslmode=disable" url-shortener
-    ```
-
+С PostgreSQL хранилищем:
+```bash
+docker-compose --profile postgres up -d
+```
 ## Конфигурация
 
 Сервис использует переменные окружения для конфигурации:
 
 *   `CONFIG_PATH`: Путь к файлу конфигурации (`config/local.yaml` или `config/prod.yaml`). Если не указан, используется `./config/local.yaml`.
 *   `DATABASE_URL`: Строка подключения к базе данных PostgreSQL (пример: `"postgres://user:password@host:port/database?sslmode=disable"`). Используется, только если `STORAGE_TYPE` установлено в `postgres`.
-
-В локальной разработке рекомендуется использовать файл `.env` для установки переменных окружения. Пример файла `.env`:
-
-```
-DATABASE_URL="postgres://myuser:mypassword@localhost:5432/url_shortener?sslmode=disable"
-CONFIG_PATH="./config/local.yaml"
-```
-
-## Тестирование
-
-Для запуска юнит-тестов выполните команду:
-
-```bash
-make test
-```
-
-Перед запуском тестов убедитесь, что:
-
-*   Установлена переменная окружения `TEST_DATABASE_URL` с правильной строкой подключения к тестовой базе данных PostgreSQL.
-*   Создана тестовая база данных PostgreSQL с именем, указанным в `TEST_DATABASE_URL`.
 
 ## Алгоритм генерации коротких ссылок
 
@@ -153,17 +87,27 @@ make test
 
 *   **Создание короткой ссылки:**
 
-    ```bash
-    grpcurl -plaintext -d '{"original_url": "https://www.example.com"}' localhost:8082 url_shortener.URLShortener.CreateShortURL
-    ```
+```bash
+grpcurl -plaintext -d "{\"original_url\": \"https://www.example.com\"}" localhost:8082 url_shortener.URLShortener.CreateShortURL
+```
+Вывод:
+```bash
+{
+  "shortUrl": "GdII4Gm7qI"
+}
+```
 
 *   **Получение оригинального URL:**
 
     ```bash
-    grpcurl -plaintext -d '{"short_url": "aBcDeFgHiJ"}' localhost:8082 url_shortener.URLShortener.GetOriginalURL
+    grpcurl -plaintext -d "{\"short_url\": \"GdII4Gm7qI\"}" localhost:8082 url_shortener.URLShortener.GetOriginalURL
     ```
-
-    Замените `aBcDeFgHiJ` на фактическую короткую ссылку.
+Вывод:
+```bash
+{
+  "originalUrl": "https://www.example.com"
+}
+```
 
 ## Оценка масштабируемости и долговечности
 
