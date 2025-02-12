@@ -49,7 +49,7 @@
 Соберите Docker-образ:
 
 ```bash
-docker build -t url-shortener .
+docker build .
 ```
 Запуск с использованием Docker Compose
 
