@@ -8,8 +8,8 @@ import (
 
 type MemoryStorage struct {
 	mu      sync.RWMutex
-	data    map[string]string // shortURL -> originalURL
-	revData map[string]string // originalURL -> shortURL
+	data    map[string]string
+	revData map[string]string
 }
 
 func New() *MemoryStorage {

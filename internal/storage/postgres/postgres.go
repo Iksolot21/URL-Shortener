@@ -51,7 +51,7 @@ func (s *PostgresStorage) SaveURL(urlToSave string, alias string) error {
 	)
 	if err != nil {
 		var pqErr *pq.Error
-		if errors.As(err, &pqErr) && pqErr.Code == "23505" { // unique_violation
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 			return storage.ErrURLExists
 		}
 		return fmt.Errorf("failed to insert url: %w", err)
