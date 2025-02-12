@@ -33,14 +33,6 @@
 *   **`internal/storage/`:** Интерфейсы и реализации для различных типов хранилищ (in-memory, PostgreSQL).
 *   **`tests/`:** Юнит-тесты.
 
-## Зависимости
-
-*   `github.com/joho/godotenv`: Для загрузки переменных окружения из файла `.env` (только для локальной разработки).
-*   `google.golang.org/grpc`: Для работы с gRPC.
-*   `google.golang.org/protobuf`: Для работы с protobuf-сообщениями.
-*   `github.com/lib/pq`: Для работы с PostgreSQL.
-*   `github.com/ilyakaznacheev/cleanenv`: Для загрузки переменных окружения в структуру
-
 ## Сборка и запуск
 
 Соберите Docker-образ:
